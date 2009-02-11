@@ -48,9 +48,26 @@ main (int   argc,
   gdouble      cam_opacity = 0.8;
   gchar const* v4l_device = "/dev/video0";
 
-  GError     * error = NULL;
+  GOptionContext* options;
+  GError        * error = NULL;
 
-  gst_init (&argc, &argv);
+  g_thread_init (NULL);
+
+  options = g_option_context_new ("");
+  g_option_context_add_group (options, gst_init_get_option_group ());
+  if (!g_option_context_parse (options, &argc, &argv, &error))
+    {
+      gchar* help = NULL;
+#if GLIB_CHECK_VERSION(2,14,0)
+      help = g_option_context_get_help (options, TRUE, NULL);
+#endif
+      g_printerr ("%s%s", help ? help : "", error ? error->message : "");
+      g_free (help);
+      g_error_free (error);
+      return 1;
+    }
+
+  g_option_context_free (options);
 
   signal (SIGINT, sigint_handler);
 
