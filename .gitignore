@@ -3,8 +3,13 @@ INSTALL
 Makefile
 Makefile.in
 aclocal.m4
+compile
 config.log
 config.status
 configure
+depcomp
+.deps
 install-sh
 missing
+pongo
+*.o
