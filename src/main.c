@@ -23,6 +23,8 @@
 
 #include <gst/gst.h>
 
+#include <glib/gi18n.h>
+
 static GMainLoop * loop = NULL;
 
 static void
@@ -40,13 +42,24 @@ main (int   argc,
   GstPad    * cam_pad;
   gchar     * launch;
 
-  gchar const* out_file = "final.ogv";
-  gint         out_w    = 1024;
-  gint         out_h    =  768;
-  gint         cam_w    =  300;
-  gint         cam_h    =  200;
-  gdouble      cam_opacity = 0.8;
-  gchar const* v4l_device = "/dev/video0";
+  gchar const* out_file = NULL;
+  gint         out_w    =   -1;
+  gint         out_h    =   -1;
+  gint         cam_w    =   -1;
+  gint         cam_h    =   -1;
+  gdouble      cam_opacity = -0.1;
+  gchar const* v4l_device = NULL;
+
+  GOptionEntry    entries[] = {
+    {"output", 'o', 0, G_OPTION_ARG_FILENAME, &out_file, N_("output file (default: final.ogv)"), N_("FILE")},
+    {"width",  'w', 0, G_OPTION_ARG_INT, &out_w, N_("output width (default: 1024)"), N_("WIDTH")},
+    {"height", 'h', 0, G_OPTION_ARG_INT, &out_h, N_("output height (default: 768)"), N_("HEIGHT")},
+    {"cam-width", 'W', 0, G_OPTION_ARG_INT, &cam_w, N_("camera width (default: 300)"), N_("WIDTH")},
+    {"cam-height", 'H', 0, G_OPTION_ARG_INT, &cam_h, N_("camera height (default: 200)"), N_("HEIGHT")},
+    {"opacity", 'O', 0, G_OPTION_ARG_DOUBLE, &cam_opacity, N_("camera opacity (default 0.8)"), N_("OPACITY")},
+    {"device", 'd', 0, G_OPTION_ARG_FILENAME, &v4l_device, N_("camera device (default: /dev/video0)"), N_("DEVICE")},
+    {NULL}
+  };
 
   GOptionContext* options;
   GError        * error = NULL;
@@ -54,6 +67,7 @@ main (int   argc,
   g_thread_init (NULL);
 
   options = g_option_context_new ("");
+  g_option_context_add_main_entries (options, entries, NULL);
   g_option_context_add_group (options, gst_init_get_option_group ());
   if (!g_option_context_parse (options, &argc, &argv, &error))
     {
@@ -68,6 +82,35 @@ main (int   argc,
     }
 
   g_option_context_free (options);
+
+  if (!out_file)
+    {
+      out_file = g_strdup ("final.ogv");
+    }
+  if (out_w == -1)
+    {
+      out_w = 1024;
+    }
+  if (out_h == -1)
+    {
+      out_h = 768;
+    }
+  if (cam_w == -1)
+    {
+      cam_w = 300;
+    }
+  if (cam_h == -1)
+    {
+      cam_h = 200;
+    }
+  if (cam_opacity < 0.0)
+    {
+      cam_opacity = 0.8;
+    }
+  if (!v4l_device)
+    {
+      v4l_device = "/dev/video0";
+    }
 
   signal (SIGINT, sigint_handler);
 
