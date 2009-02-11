@@ -1,4 +1,4 @@
-AC_INIT(pongo,0.0.1,mailto:herzi@gnome-de.org)
+AC_INIT(pongo,0.2.0,mailto:herzi@gnome-de.org)
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 
 AM_PROG_CC_C_O
