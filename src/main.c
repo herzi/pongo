@@ -37,9 +37,7 @@ int
 main (int   argc,
       char**argv)
 {
-  GstElement* mix;
   GstElement* pipeline;
-  GstPad    * cam_pad;
   gchar     * launch;
 
   gchar const* out_file = NULL;
@@ -49,6 +47,7 @@ main (int   argc,
   gint         cam_h    =   -1;
   gdouble      cam_opacity = -0.1;
   gchar const* v4l_device = NULL;
+  gboolean     no_cam     = FALSE;
 
   GOptionEntry    entries[] = {
     {"output", 'o', 0, G_OPTION_ARG_FILENAME, &out_file, N_("output file (default: final.ogv)"), N_("FILE")},
@@ -58,6 +57,7 @@ main (int   argc,
     {"cam-height", 'H', 0, G_OPTION_ARG_INT, &cam_h, N_("camera height (default: 200)"), N_("HEIGHT")},
     {"opacity", 'O', 0, G_OPTION_ARG_DOUBLE, &cam_opacity, N_("camera opacity (default 0.8)"), N_("OPACITY")},
     {"device", 'd', 0, G_OPTION_ARG_FILENAME, &v4l_device, N_("camera device (default: /dev/video0)"), N_("DEVICE")},
+    {"no-camera", 'n', 0, G_OPTION_ARG_NONE, &no_cam, N_("disable usage of camera (default: enable)"), NULL},
     {NULL}
   };
 
@@ -114,12 +114,23 @@ main (int   argc,
 
   signal (SIGINT, sigint_handler);
 
-  launch = g_strdup_printf ("videomixer name=mix ! ffmpegcolorspace ! queue ! theoraenc ! oggmux name=mux ! filesink location=%s "
-                            "istximagesrc name=xsrc use-damage=false ! videorate ! video/x-raw-rgb,framerate=10/1 ! ffmpegcolorspace ! videoscale method=1 ! video/x-raw-yuv,width=%d,height=%d ! mix.sink_0 "
-                            "v4l2src name=camsrc device=%s ! ffmpegcolorspace ! videorate ! video/x-raw-yuv,framerate=10/1,width=320,height=240 ! queue ! videoscale ! ffmpegcolorspace ! video/x-raw-yuv,height=%d,height=%d ! mix.sink_1 "
-                            "alsasrc name=asrc ! queue ! audioconvert ! vorbisenc ! mux."
-                            ,
-                            out_file, out_w, out_h, v4l_device, cam_w, cam_h);
+  if (no_cam)
+    {
+      launch = g_strdup_printf ("videomixer name=mix ! ffmpegcolorspace ! queue ! theoraenc ! oggmux name=mux ! filesink location=%s "
+                                "istximagesrc name=xsrc use-damage=false ! videorate ! video/x-raw-rgb,framerate=10/1 ! ffmpegcolorspace ! videoscale method=1 ! video/x-raw-yuv,width=%d,height=%d ! mix.sink_0 "
+                                "alsasrc name=asrc ! queue ! audioconvert ! vorbisenc ! mux."
+                                ,
+                                out_file, out_w, out_h);
+    }
+  else
+    {
+      launch = g_strdup_printf ("videomixer name=mix ! ffmpegcolorspace ! queue ! theoraenc ! oggmux name=mux ! filesink location=%s "
+                                "istximagesrc name=xsrc use-damage=false ! videorate ! video/x-raw-rgb,framerate=10/1 ! ffmpegcolorspace ! videoscale method=1 ! video/x-raw-yuv,width=%d,height=%d ! mix.sink_0 "
+                                "v4l2src name=camsrc device=%s ! ffmpegcolorspace ! videorate ! video/x-raw-yuv,framerate=10/1,width=320,height=240 ! queue ! videoscale ! ffmpegcolorspace ! video/x-raw-yuv,height=%d,height=%d ! mix.sink_1 "
+                                "alsasrc name=asrc ! queue ! audioconvert ! vorbisenc ! mux."
+                                ,
+                                out_file, out_w, out_h, v4l_device, cam_w, cam_h);
+    }
 
   pipeline = gst_parse_launch (launch, &error);
 
@@ -131,15 +142,18 @@ main (int   argc,
       return 1;
     }
 
-  mix = gst_bin_get_by_name (GST_BIN (pipeline), "mix");
+  if (!no_cam) /* if (cam) */
+    {
+      GstElement* mix     = gst_bin_get_by_name (GST_BIN (pipeline), "mix");
+      GstPad    * cam_pad = gst_element_get_pad (mix, "sink_1");
 
-  cam_pad = gst_element_get_pad (mix, "sink_1");
-  g_object_set (cam_pad,
-                "xpos", out_w-cam_w,
-                "ypos", out_h-cam_h,
-                "alpha", cam_opacity,
-                "zorder", 1,
-                NULL);
+      g_object_set (cam_pad,
+                    "xpos", out_w-cam_w,
+                    "ypos", out_h-cam_h,
+                    "alpha", cam_opacity,
+                    "zorder", 1,
+                    NULL);
+    }
 
   gst_element_set_state (pipeline, GST_STATE_PLAYING);
   g_print ("Capturing...\n");
@@ -149,11 +163,17 @@ main (int   argc,
 
   g_print ("Stopping capture...\n");
   {
+    GstElement* element;
     GstEvent* eos = gst_event_new_eos ();
-    gst_element_send_event (gst_bin_get_by_name (GST_BIN (pipeline), "camsrc"),
-                            eos);
 
-    eos = gst_event_new_eos ();
+    element = gst_bin_get_by_name (GST_BIN (pipeline), "camsrc");
+    if (element)
+      {
+        gst_element_send_event (gst_bin_get_by_name (GST_BIN (pipeline), "camsrc"),
+                                eos);
+        eos = gst_event_new_eos ();
+      }
+
     gst_element_send_event (gst_bin_get_by_name (GST_BIN (pipeline), "xsrc"),
                             eos);
 
